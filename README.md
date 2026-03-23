@@ -1,67 +1,84 @@
 # claude-code-hwp-mcp
 
-Claude Code / Claude Desktop에서 한글(HWP) 문서를 직접 제어하는 MCP 서버.
-pyhwpx COM API를 통해 문서 열기, 편집, 분석, 저장, 변환까지 **85개+ 도구**를 제공합니다.
+Claude Code와 Claude Desktop에서 한글(HWP) 문서를 AI로 자동 편집하는 MCP 서버입니다.
 
-> **Windows 전용** | 한글 2014 이상 | Python 3.8+ | Claude Code & Claude Desktop 지원
+85개 이상의 도구로 문서 열기, 표 채우기, 텍스트 편집, 서식 설정, PDF 변환까지 모두 자동화할 수 있습니다.
 
-## 빠른 시작
+> Windows 전용 | 한글 2014 이상 | Python 3.8+ | Claude Code + Claude Desktop 지원
 
-```bash
-# 1. Python 패키지 설치
-pip install pyhwpx pywin32
+---
 
-# 2. MCP 서버 설치
-npm install -g claude-code-hwp-mcp
+## 설치 가이드 (처음 설정하는 분)
 
-# 3. 한글(HWP) 프로그램을 실행하고 빈 문서를 열어둡니다
+아래 순서대로 따라하세요. 5분이면 완료됩니다.
 
-# 4. Claude Code 또는 Claude Desktop에서 사용
-```
+### Step 1. Python 설치
 
-## 사전 요구사항
+**반드시 python.org 공식 버전을 설치하세요.**
 
-| 요구사항 | 설치 방법 | 비고 |
-|----------|-----------|------|
-| Windows 10/11 | - | macOS/Linux 미지원 (COM API 기반) |
-| 한글(HWP) | 한컴오피스 설치 | 한글 2014, 2018, 2020, 2022, 2024 지원 |
-| Python 3.8+ | [python.org](https://www.python.org/downloads/) | **반드시 python.org에서 설치** |
-| Node.js 18+ | [nodejs.org](https://nodejs.org/) | LTS 버전 권장 |
+1. https://www.python.org/downloads/ 에 접속
+2. "Download Python 3.x.x" 버튼 클릭
+3. 설치 화면에서 **"Add Python to PATH" 체크박스를 반드시 체크**
+4. "Install Now" 클릭
 
-### Python 설치 시 주의사항
+> **Microsoft Store 버전 Python은 사용하지 마세요.** Store 버전은 패키지가 격리된 경로에 설치되어 pyhwpx를 인식하지 못합니다. 이미 Store 버전이 설치되어 있다면 [Microsoft Store Python 문제 해결](#microsoft-store-python-문제) 섹션을 참고하세요.
 
-**python.org 공식 버전을 설치하세요.** Microsoft Store 버전(WindowsApps 경로)은 pyhwpx가 정상 동작하지 않을 수 있습니다.
+설치 확인 (명령 프롬프트에서):
 
-설치 화면에서 **"Add Python to PATH"를 반드시 체크**하세요.
-
-설치 확인:
 ```bash
 python --version
+```
+
+`Python 3.x.x`가 출력되면 성공입니다.
+
+### Step 2. Python 패키지 설치
+
+명령 프롬프트(cmd)를 열고 아래를 실행하세요:
+
+```bash
+pip install pyhwpx pywin32
+```
+
+설치 확인:
+
+```bash
 pip show pyhwpx
 ```
 
-## 설치
+### Step 3. Node.js 설치
 
-### 방법 A: npm 글로벌 설치 (권장)
+1. https://nodejs.org/ 에 접속
+2. LTS 버전 다운로드 후 설치
+
+### Step 4. MCP 서버 설치
+
+명령 프롬프트에서:
 
 ```bash
 npm install -g claude-code-hwp-mcp
 ```
 
-설치 후 pyhwpx가 없으면 자동으로 안내 메시지가 표시됩니다.
+### Step 5. Claude에 MCP 서버 연결
 
-### 방법 B: GitHub 클론
+사용하는 Claude 앱에 따라 아래 설정을 진행하세요:
 
-```bash
-git clone https://github.com/gmlcjf0326/claude-code-hwp-mcp.git
-cd claude-code-hwp-mcp
-npm install
-npm run build
-```
+- **Claude Code** 사용자 → [Claude Code 설정](#claude-code-설정) 섹션으로
+- **Claude Desktop** 사용자 → [Claude Desktop 설정](#claude-desktop-설정) 섹션으로
+
+---
 
 ## Claude Code 설정
 
-`~/.claude/settings.json` 파일에 추가:
+### 설정 파일 열기
+
+Claude Code 터미널에서 설정 파일을 엽니다. 파일 위치:
+
+- Windows: `C:\Users\사용자이름\.claude\settings.json`
+- 또는 `~/.claude/settings.json`
+
+### 설정 추가
+
+`settings.json` 파일에 아래 내용을 추가하세요:
 
 ```json
 {
@@ -73,20 +90,77 @@ npm run build
 }
 ```
 
-GitHub 클론 방식:
+이미 다른 MCP 서버가 등록되어 있다면 `mcpServers` 안에 추가합니다:
+
+```json
+{
+  "mcpServers": {
+    "기존-서버": {
+      "command": "기존-명령"
+    },
+    "claude-code-hwp-mcp": {
+      "command": "hwp-mcp"
+    }
+  }
+}
+```
+
+### GitHub 클론 방식으로 설치한 경우
+
+npm 글로벌 설치 대신 GitHub에서 클론한 경우:
 
 ```json
 {
   "mcpServers": {
     "claude-code-hwp-mcp": {
       "command": "node",
-      "args": ["C:/claude-code-hwp-mcp/dist/index.js"]
+      "args": ["C:\\claude-code-hwp-mcp\\dist\\index.js"]
     }
   }
 }
 ```
 
-Python 경로를 직접 지정하려면:
+`args`의 경로를 실제 클론한 위치로 변경하세요.
+
+---
+
+## Claude Desktop 설정
+
+### Step 1. 설정 파일 찾기
+
+Windows 탐색기에서 주소창에 아래를 입력하고 Enter:
+
+```
+%APPDATA%\Claude
+```
+
+`Claude` 폴더가 열립니다.
+
+### Step 2. 설정 파일 만들기 또는 열기
+
+해당 폴더에 `claude_desktop_config.json` 파일이 있으면 메모장으로 엽니다.
+
+파일이 없으면 새로 만드세요:
+1. 폴더에서 마우스 우클릭 > 새로 만들기 > 텍스트 문서
+2. 파일 이름을 `claude_desktop_config.json`으로 변경 (확장자 `.txt`가 아닌 `.json`)
+
+### Step 3. 설정 내용 입력
+
+파일에 아래 내용을 그대로 붙여넣으세요:
+
+```json
+{
+  "mcpServers": {
+    "claude-code-hwp-mcp": {
+      "command": "hwp-mcp"
+    }
+  }
+}
+```
+
+### Step 4. (선택) Python 경로 직접 지정
+
+Python이 여러 개 설치되어 있거나 Microsoft Store Python 문제가 있을 경우, Python 경로를 명시적으로 지정할 수 있습니다:
 
 ```json
 {
@@ -94,41 +168,53 @@ Python 경로를 직접 지정하려면:
     "claude-code-hwp-mcp": {
       "command": "hwp-mcp",
       "env": {
-        "PYTHON_PATH": "C:/Python313/python.exe"
+        "PYTHON_PATH": "C:\\Users\\사용자이름\\AppData\\Local\\Programs\\Python\\Python313\\python.exe"
       }
     }
   }
 }
 ```
 
-## Claude Desktop 설정
+본인의 Python 경로를 확인하려면 명령 프롬프트에서:
 
-`%APPDATA%\Claude\claude_desktop_config.json` 파일에 추가:
-
-```json
-{
-  "mcpServers": {
-    "claude-code-hwp-mcp": {
-      "command": "hwp-mcp"
-    }
-  }
-}
+```bash
+python -c "import sys; print(sys.executable)"
 ```
+
+출력된 경로를 `PYTHON_PATH` 값으로 사용하세요.
+
+### Step 5. Claude Desktop 재시작
+
+설정 파일을 저장한 후 **Claude Desktop을 완전히 종료했다가 다시 실행**하세요. (트레이에서도 완전 종료)
+
+### Step 6. 연결 확인
+
+Claude Desktop에서 아래와 같이 입력하세요:
+
+```
+hwp_check_setup 실행해줘
+```
+
+모든 항목에 체크 표시가 나오면 성공입니다.
+
+---
 
 ## 사용 전 반드시 확인
 
-**한글(HWP) 프로그램이 실행 중이어야 합니다.** MCP 서버는 한글 프로그램의 COM API를 통해 문서를 제어하므로, 한글이 열려 있지 않으면 도구가 동작하지 않습니다.
+**한글(HWP) 프로그램이 실행 중이어야 합니다.**
 
-1. 한글(HWP) 프로그램 실행
-2. 빈 문서 하나 열어두기
-3. Claude에서 작업 시작
+MCP 서버는 한글 프로그램의 COM API를 통해 문서를 제어합니다. 한글이 열려 있지 않으면 문서 관련 도구가 동작하지 않습니다.
 
-환경 진단이 필요하면:
-```
-"hwp_check_setup 실행해줘"
-```
+사용 순서:
+1. 한글(HWP) 프로그램을 실행합니다
+2. 빈 문서가 열린 상태로 둡니다
+3. Claude Code 또는 Claude Desktop에서 작업을 시작합니다
+
+---
 
 ## 사용 예시
+
+Claude에게 자연어로 요청하면 됩니다:
 
 ```
 "C:/문서/사업계획서.hwp 파일을 열어서 분석해줘"
@@ -139,13 +225,87 @@ Python 경로를 직접 지정하려면:
 "직원_명단.xlsx의 각 행으로 위촉장.hwp를 개별 생성해줘"
 ```
 
+---
+
+## 문제 해결
+
+### Microsoft Store Python 문제
+
+**증상**: hwp_check_setup에서 "pyhwpx 미설치" 또는 "한글 미설치"로 표시되지만 실제로는 설치되어 있음
+
+**진단**: 명령 프롬프트에서 아래를 실행하세요:
+
+```bash
+python -c "import sys; print(sys.executable)"
+```
+
+출력 경로에 `WindowsApps`가 포함되어 있으면 Microsoft Store 버전입니다:
+
+```
+C:\Users\사용자\AppData\Local\Microsoft\WindowsApps\python.exe  (Store 버전)
+```
+
+**해결 방법 A (권장): python.org 버전으로 재설치**
+
+1. Windows 설정 > 앱 > "Python"을 찾아서 제거
+2. https://www.python.org/downloads/ 에서 다시 설치
+3. 설치 시 "Add Python to PATH" 반드시 체크
+4. `pip install pyhwpx pywin32` 다시 실행
+
+**해결 방법 B: Claude 설정에서 Python 경로 지정**
+
+Store Python을 유지한 채, MCP 설정에서 직접 경로를 지정합니다:
+
+```json
+{
+  "mcpServers": {
+    "claude-code-hwp-mcp": {
+      "command": "hwp-mcp",
+      "env": {
+        "PYTHON_PATH": "C:\\Users\\사용자\\AppData\\Local\\Programs\\Python\\Python313\\python.exe"
+      }
+    }
+  }
+}
+```
+
+### Python을 찾을 수 없습니다
+
+python.org에서 Python 3.8+을 설치하세요. 설치 시 "Add Python to PATH" 체크 필수입니다. 설치 후 명령 프롬프트를 새로 열어야 합니다.
+
+### pyhwpx 모듈을 찾을 수 없습니다
+
+```bash
+pip install pyhwpx pywin32
+```
+
+### COM class not registered
+
+한컴오피스 한글을 설치하세요. 설치 후 한글을 한번 실행하여 초기 설정을 완료하세요.
+
+### RPC 서버를 사용할 수 없습니다
+
+한글 프로그램을 닫고 다시 시도하세요. 작업 관리자(Ctrl+Shift+Esc)에서 Hwp.exe 프로세스가 남아있으면 종료 후 재시도하세요.
+
+### 환경 자동 진단
+
+Claude에게 요청하세요:
+
+```
+"hwp_check_setup 실행해줘"
+```
+
+Python 경로, pyhwpx 설치 여부, 한글 프로그램 설치 및 실행 상태를 자동으로 확인합니다.
+
+---
+
 ## 기능 목록 (85개+)
 
 ### 환경/문서 관리 (6개)
 
 | 도구 | 설명 |
 |------|------|
-| hwp_check_setup | Python/pyhwpx/한글 설치 상태 진단 |
+| hwp_check_setup | Python/pyhwpx/한글 설치 상태 자동 진단 |
 | hwp_list_files | 디렉토리 내 HWP/HWPX 파일 목록 |
 | hwp_open_document | HWP 문서 열기 (자동 백업) |
 | hwp_close_document | 문서 닫기 |
@@ -266,17 +426,7 @@ Python 경로를 직접 지정하려면:
 | hwp_export_docx | DOCX(Word) 내보내기 |
 | hwp_export_html | HTML 내보내기 |
 
-## 아키텍처
-
-```
-Claude Code / Claude Desktop
-    |  MCP Protocol (stdio)
-MCP Server (Node.js/TypeScript)
-    |  child_process (JSON stdin/stdout)
-Python Bridge (hwp_service.py + pyhwpx)
-    |  COM API
-한글(HWP) 프로그램
-```
+---
 
 ## Toolset 모드
 
@@ -293,35 +443,27 @@ Python Bridge (hwp_service.py + pyhwpx)
 }
 ```
 
-## 문제 해결
+---
 
-### Python을 찾을 수 없습니다
+## 아키텍처
 
-python.org에서 Python 3.8+을 설치하세요. 설치 시 "Add Python to PATH" 체크 필수.
-Microsoft Store 버전은 권장하지 않습니다.
-
-### pyhwpx 모듈을 찾을 수 없습니다
-
-```bash
-pip install pyhwpx pywin32
+```
+Claude Code / Claude Desktop
+    |  MCP Protocol (stdio)
+MCP Server (Node.js/TypeScript)
+    |  child_process (JSON stdin/stdout)
+Python Bridge (hwp_service.py + pyhwpx)
+    |  COM API
+한글(HWP) 프로그램
 ```
 
-여러 Python이 설치된 경우 경로를 확인하세요:
-```bash
-python -c "import sys; print(sys.executable)"
-```
+---
 
-### COM class not registered
+## 지원 한글 버전
 
-한컴오피스 한글을 설치하세요. 설치 후 한글을 한번 실행하여 초기 설정을 완료하세요.
+한글 2014, 2018, 2020, 2022, 2024 모두 지원합니다.
 
-### RPC 서버를 사용할 수 없습니다
-
-한글을 닫고 다시 시도하세요. 작업 관리자에서 Hwp.exe 프로세스가 남아있으면 종료하세요.
-
-### 한글이 열려있는데도 안 됩니다
-
-한글 프로그램이 실행 중이어야 COM 연결이 됩니다. hwp_check_setup으로 진단하세요.
+---
 
 ## 라이선스
 
