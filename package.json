@@ -1,6 +1,6 @@
 {
   "name": "claude-code-hwp-mcp",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "MCP server for HWP (한글) document automation via pyhwpx COM API. 85+ tools for document editing, analysis, and AI-powered filling.",
   "type": "module",
   "main": "dist/index.js",

@@ -23,7 +23,7 @@ const resolvedToolset: Toolset = validToolsets.includes(toolset as Toolset)
 const bridge = new HwpBridge();
 const server = new McpServer({
   name: 'claude-code-hwp-mcp',
-  version: '0.2.1',
+  version: '0.2.2',
 });
 
 setupServer(server, bridge, resolvedToolset);
