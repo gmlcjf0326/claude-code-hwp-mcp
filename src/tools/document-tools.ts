@@ -108,7 +108,9 @@ export function registerDocumentTools(server: McpServer, bridge: HwpBridge): voi
           items.push(`❌ OS: ${prereq.os.error}`);
         }
         if (prereq.python.found) {
-          items.push(`✅ Python ${prereq.python.version}`);
+          let pyInfo = `✅ Python ${prereq.python.version} (${prereq.python.path || 'unknown'})`;
+          if (prereq.python.guide) pyInfo += `\n   ⚠️ ${prereq.python.guide}`;
+          items.push(pyInfo);
         } else {
           items.push(`❌ Python 미설치\n   ${prereq.python.guide}`);
         }
@@ -118,16 +120,27 @@ export function registerDocumentTools(server: McpServer, bridge: HwpBridge): voi
           items.push(`❌ pyhwpx 미설치\n   ${prereq.pyhwpx.guide}`);
         }
         if (prereq.hwp.found) {
-          items.push('✅ 한글(HWP) 프로그램');
+          items.push('✅ 한글(HWP) 프로그램 설치됨');
         } else if (prereq.pyhwpx.found) {
           items.push(`❌ 한글(HWP) 미설치\n   ${prereq.hwp.guide}`);
         }
+        // 한글 실행 여부
+        if (prereq.hwp.found) {
+          if (prereq.hwpRunning) {
+            items.push('✅ 한글(HWP) 실행 중');
+          } else {
+            items.push('⚠️ 한글(HWP)이 실행되지 않았습니다. 문서 작업 전 한글을 먼저 실행하세요.');
+          }
+        }
 
+        const allReady = prereq.ok && prereq.hwpRunning;
         return { content: [{ type: 'text', text: JSON.stringify({
-          status: prereq.ok ? 'ready' : 'not_ready',
-          message: prereq.ok
+          status: allReady ? 'ready' : prereq.ok ? 'hwp_not_running' : 'not_ready',
+          message: allReady
             ? '모든 요구사항이 충족되었습니다. HWP 도구를 사용할 수 있습니다.'
-            : '아래 항목을 설치한 후 다시 시도하세요.',
+            : prereq.ok
+              ? '한글(HWP) 프로그램을 실행한 후 다시 시도하세요.'
+              : '아래 항목을 설치한 후 다시 시도하세요.',
           details: prereq,
           summary: items.join('\n'),
         }) }] };

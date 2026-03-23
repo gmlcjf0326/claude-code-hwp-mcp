@@ -1,6 +1,6 @@
 {
   "name": "claude-code-hwp-mcp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "MCP server for HWP (한글) document automation via pyhwpx COM API. 85+ tools for document editing, analysis, and AI-powered filling.",
   "type": "module",
   "main": "dist/index.js",
@@ -9,10 +9,12 @@
   },
   "files": [
     "dist/",
-    "python/"
+    "python/*.py",
+    "python/requirements.txt"
   ],
   "scripts": {
     "build": "tsc",
+    "postinstall": "node -e \"try{require('child_process').execSync('python -c \\\"import pyhwpx\\\"',{stdio:'ignore'})}catch{console.log('\\n[claude-code-hwp-mcp] pyhwpx 미설치. 실행하세요: pip install pyhwpx pywin32\\n')}\"",
     "prepublishOnly": "npm run build",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts"

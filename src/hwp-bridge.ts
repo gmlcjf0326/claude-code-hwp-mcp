@@ -35,9 +35,10 @@ export interface BridgeState {
 
 export interface PrerequisiteResult {
   ok: boolean;
-  python: { found: boolean; version?: string; error?: string; guide?: string };
+  python: { found: boolean; version?: string; path?: string; error?: string; guide?: string };
   pyhwpx: { found: boolean; version?: string; error?: string; guide?: string };
   hwp: { found: boolean; error?: string; guide?: string };
+  hwpRunning: boolean;
   os: { ok: boolean; platform: string; error?: string };
 }
 
@@ -282,6 +283,7 @@ export class HwpBridge {
       python: { found: false },
       pyhwpx: { found: false },
       hwp: { found: false },
+      hwpRunning: false,
       os: { ok: process.platform === 'win32', platform: process.platform },
     };
 
@@ -292,15 +294,25 @@ export class HwpBridge {
 
     const pythonExe = this.findPython();
 
-    // 1) Python 체크
+    // 1) Python 체크 — 경로 + 버전 + Microsoft Store 감지
     try {
-      const { stdout } = await execFileAsync(pythonExe, ['--version'], { timeout: 5000 });
-      const ver = stdout.trim().replace('Python ', '');
-      result.python = { found: true, version: ver };
+      const { stdout } = await execFileAsync(pythonExe, ['-c', 'import sys; print(sys.version.split()[0]); print(sys.executable)'], { timeout: 5000 });
+      const lines = stdout.trim().split(/\r?\n/);
+      const ver = lines[0];
+      const exePath = lines[1] || '';
+      const isStorePython = exePath.includes('WindowsApps');
+      result.python = {
+        found: true,
+        version: ver,
+        path: exePath,
+        guide: isStorePython
+          ? `Microsoft Store Python 감지 (${exePath}). pyhwpx가 인식되지 않을 수 있습니다.\n→ python.org에서 재설치를 권장합니다: https://www.python.org/downloads/`
+          : undefined,
+      };
     } catch {
       result.python = {
         found: false,
-        guide: 'Python 3.8+ 설치 필요\n→ https://www.python.org/downloads/\n→ 설치 시 "Add Python to PATH" 반드시 체크\n→ 설치 후 터미널 재시작',
+        guide: 'Python 3.8+ 설치 필요\n→ https://www.python.org/downloads/ 에서 설치\n→ 설치 시 "Add Python to PATH" 반드시 체크\n→ Microsoft Store 버전이 아닌 python.org 공식 버전 권장\n→ 설치 후 터미널 재시작',
       };
       return result;
     }
@@ -312,7 +324,7 @@ export class HwpBridge {
     } catch {
       result.pyhwpx = {
         found: false,
-        guide: 'pyhwpx 패키지 설치 필요\n→ 터미널에서 실행: pip install pyhwpx\n→ pywin32도 함께 필요: pip install pywin32',
+        guide: `pyhwpx 패키지 설치 필요\n→ 감지된 Python: ${result.python.path || pythonExe}\n→ 터미널에서 실행: pip install pyhwpx pywin32`,
       };
       return result;
     }
@@ -329,9 +341,16 @@ export class HwpBridge {
           guide: '한글(HWP) 프로그램이 설치되지 않았습니다.\n→ 한컴오피스 한글 설치 필요 (한글 2014 이상)\n→ 설치 후 한글을 한번 실행하여 초기 설정 완료',
         };
       } else {
-        // COM은 등록되어 있지만 다른 에러 (이미 실행 중 등) → 설치는 된 것
         result.hwp = { found: true };
       }
+    }
+
+    // 4) 한글 프로세스 실행 여부 체크
+    try {
+      const { stdout } = await execFileAsync('tasklist', ['/FI', 'IMAGENAME eq Hwp.exe', '/NH'], { timeout: 5000 });
+      result.hwpRunning = stdout.includes('Hwp.exe');
+    } catch {
+      result.hwpRunning = false;
     }
 
     result.ok = result.python.found && result.pyhwpx.found && result.hwp.found;

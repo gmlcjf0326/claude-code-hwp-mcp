@@ -1,0 +1,4 @@
+src/
+tsconfig.json
+python/__pycache__/
+.gitignore
