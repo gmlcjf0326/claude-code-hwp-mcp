@@ -459,6 +459,102 @@ Python Bridge (hwp_service.py + pyhwpx)
 
 ---
 
+## HWP vs HWPX 파일 형식 차이
+
+| 구분 | HWP (바이너리) | HWPX (XML 기반) |
+|------|--------------|-----------------|
+| 내부 구조 | OLE2 바이너리 | ZIP + XML |
+| 텍스트 검색 | COM API (제한적) | XML 직접 검색 (안정적) |
+| 찾기/바꾸기 | COM API (제한적) | XML 직접 치환 (안정적) |
+| 표 생성/편집 | COM API | COM API |
+| 문서 열기/저장 | COM API | COM API |
+
+**HWPX 파일 사용을 권장합니다.** HWPX 파일의 텍스트 검색/치환은 XML을 직접 조작하므로 COM API보다 안정적입니다. 한글 프로그램에서 "다른 이름으로 저장" > "HWPX" 형식으로 변환할 수 있습니다.
+
+---
+
+## 알려진 제한사항
+
+### HWP 파일의 COM 텍스트 검색
+
+HWP 바이너리 파일에서 `hwp_text_search`가 0건을 반환할 수 있습니다. 이는 한글 COM API(`HAction.Execute("FindReplace")`)의 반환값이 프로그래밍적으로 불안정한 설계 한계입니다.
+
+대안:
+- `hwp_get_document_text`로 전체 텍스트를 가져와서 직접 검색
+- 가능하면 HWPX 형식으로 변환하여 사용 (XML 검색은 안정적)
+
+### HWPX 파일 잠금
+
+한글에서 HWPX 파일을 열어둔 상태에서 XML 직접 편집을 시도하면 파일 잠금(EBUSY) 에러가 발생합니다. 이 경우 자동으로 COM 경로로 폴백합니다.
+
+---
+
+## 추천 워크플로우
+
+### 양식 채우기
+
+```
+1. hwp_open_document → 파일 열기
+2. hwp_smart_analyze → 문서 구조 파악
+3. hwp_smart_fill 또는 hwp_auto_fill_from_reference → 자동 채우기
+4. hwp_privacy_scan → 개인정보 확인
+5. hwp_save_document → 저장
+```
+
+### 텍스트 치환
+
+```
+1. hwp_open_document → 파일 열기
+2. hwp_find_replace 또는 hwp_find_replace_multi → 치환
+3. hwp_save_document → 저장
+```
+
+### 문서 분석
+
+```
+1. hwp_open_document → 파일 열기
+2. hwp_analyze_document → 전체 구조 분석
+3. hwp_get_tables → 표 데이터 확인
+4. hwp_word_count → 글자수 통계
+```
+
+---
+
+## v0.3.0 변경사항
+
+### 버그 수정 (10건)
+
+- SelectAll 문서 파괴 수정 (table_create_from_data, gantt_chart 등)
+- find_replace 전후 텍스트 비교 검증으로 개선
+- text_search 선택 영역 기반 판단으로 개선
+- find_and_append 커서 유실 수정 (Cancel → MoveRight)
+- 버퍼 오버플로우 시 개별 요청만 거부
+- XHwpMessageBoxMode 복원 (close_document)
+- insert_markdown 표 파싱 추가
+- blank_template.hwpx 프로그래밍적 생성 (파일 의존성 제거)
+- except pass → stderr 로깅 변환
+- MAX_TABLES scanned_tables 필드 분리
+
+### HWPX XML 라우팅
+
+HWPX 파일의 텍스트 검색/치환을 Node.js XML 엔진으로 직접 처리:
+- hwp_find_replace → XML replaceTextInSection
+- hwp_find_replace_multi → XML 루프 치환
+- hwp_find_replace_nth → XML N번째 치환
+- hwp_find_and_append → XML findAndAppend
+- hwp_text_search → XML searchTextInSection
+
+XML 실패 시(파일 잠금 등) COM 경로로 자동 폴백.
+
+### 환경 진단 개선
+
+- Microsoft Store Python 자동 감지 + 경고
+- 한글 프로세스 실행 여부 체크 (tasklist)
+- Python 실행 경로 표시
+- postinstall 스크립트 ESM 호환
+
+---
+
 ## 지원 한글 버전
 
 한글 2014, 2018, 2020, 2022, 2024 모두 지원합니다.
