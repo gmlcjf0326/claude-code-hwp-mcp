@@ -142,6 +142,86 @@ export function replaceTextInSection(doc: Document, find: string, replace: strin
   return count;
 }
 
+// ── HWPX XML 검색 (COM 우회) ──
+
+/**
+ * HWPX section XML에서 텍스트 검색. COM FindReplace 우회용.
+ */
+export function searchTextInSection(doc: Document, searchText: string): { total: number; results: Array<{ index: number; paragraph: number; context: string }> } {
+  const results: Array<{ index: number; paragraph: number; context: string }> = [];
+  const paragraphs = doc.getElementsByTagNameNS(NS_HP, 'p');
+  let matchCount = 0;
+
+  for (let i = 0; i < paragraphs.length; i++) {
+    const runs = paragraphs[i].getElementsByTagNameNS(NS_HP, 'run');
+    let paraText = '';
+    for (let j = 0; j < runs.length; j++) {
+      const tNodes = runs[j].getElementsByTagNameNS(NS_HP, 't');
+      for (let k = 0; k < tNodes.length; k++) {
+        paraText += tNodes[k].textContent || '';
+      }
+    }
+
+    let pos = 0;
+    while ((pos = paraText.indexOf(searchText, pos)) !== -1) {
+      matchCount++;
+      const start = Math.max(0, pos - 20);
+      const end = Math.min(paraText.length, pos + searchText.length + 20);
+      results.push({
+        index: matchCount,
+        paragraph: i,
+        context: paraText.slice(start, end),
+      });
+      pos += searchText.length;
+    }
+  }
+
+  return { total: matchCount, results };
+}
+
+/**
+ * HWPX section XML에서 N번째 텍스트만 치환.
+ */
+export function replaceTextNthInSection(doc: Document, find: string, replace: string, nth: number): boolean {
+  const tNodes = doc.getElementsByTagNameNS(NS_HP, 't');
+  let matchCount = 0;
+
+  for (let i = 0; i < tNodes.length; i++) {
+    const t = tNodes[i];
+    const text = t.textContent || '';
+    let pos = 0;
+    while ((pos = text.indexOf(find, pos)) !== -1) {
+      matchCount++;
+      if (matchCount === nth) {
+        t.textContent = text.slice(0, pos) + replace + text.slice(pos + find.length);
+        removeLinesegarray(doc);
+        return true;
+      }
+      pos += find.length;
+    }
+  }
+  return false;
+}
+
+/**
+ * HWPX section XML에서 텍스트를 찾아 그 뒤에 추가.
+ */
+export function findAndAppendInSection(doc: Document, find: string, appendText: string): boolean {
+  const tNodes = doc.getElementsByTagNameNS(NS_HP, 't');
+
+  for (let i = 0; i < tNodes.length; i++) {
+    const t = tNodes[i];
+    const text = t.textContent || '';
+    const pos = text.indexOf(find);
+    if (pos !== -1) {
+      t.textContent = text.slice(0, pos + find.length) + appendText + text.slice(pos + find.length);
+      removeLinesegarray(doc);
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * linesegarray 요소 삭제 (CLAUDE.md 규칙 8).
  */

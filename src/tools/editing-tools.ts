@@ -1,11 +1,13 @@
 /**
  * Editing tools: fill fields, fill table cells, find/replace, insert text
+ * HWPX 파일은 XML 직접 조작으로 라우팅 (COM 우회)
  */
 import { z } from 'zod';
 import path from 'node:path';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { HwpBridge } from '../hwp-bridge.js';
 import type { Toolset } from '../server.js';
+import { readHwpxXml, writeHwpxXml, replaceTextInSection, searchTextInSection, replaceTextNthInSection, findAndAppendInSection } from '../hwpx-engine.js';
 
 const FILL_TIMEOUT = 60000;
 
@@ -151,23 +153,33 @@ export function registerEditingTools(server: McpServer, bridge: HwpBridge, tools
       use_regex: z.boolean().optional().describe('정규식 사용 여부 (기본: false)'),
     },
     async ({ find, replace, use_regex }) => {
-      if (!bridge.getCurrentDocument()) {
+      const filePath = bridge.getCurrentDocument();
+      if (!filePath) {
         return { content: [{ type: 'text', text: JSON.stringify({
           error: '열린 문서가 없습니다. hwp_open_document로 문서를 열어주세요.',
-          hint: 'Python 프로세스가 재시작되면 열린 문서 상태가 초기화됩니다.',
         }) }], isError: true };
       }
 
       try {
+        // HWPX → XML 직접 치환 (COM 우회, 안정적)
+        if (bridge.getCurrentDocumentFormat() === 'HWPX' && !use_regex) {
+          const doc = await readHwpxXml(filePath, 'Contents/section0.xml');
+          const count = replaceTextInSection(doc, find, replace);
+          await writeHwpxXml(filePath, filePath, 'Contents/section0.xml', doc);
+          bridge.setCachedAnalysis(null);
+          return { content: [{ type: 'text', text: JSON.stringify({
+            status: 'ok', find, replace, replaced: count > 0, count, engine: 'xml',
+          }) }] };
+        }
+
+        // HWP → Python COM 경로
         await bridge.ensureRunning();
         const params: Record<string, unknown> = { find, replace };
         if (use_regex) params.use_regex = true;
         const response = await bridge.send('find_replace', params, FILL_TIMEOUT);
-
         if (!response.success) {
           return { content: [{ type: 'text', text: JSON.stringify({ error: response.error }) }], isError: true };
         }
-
         bridge.setCachedAnalysis(null);
         return { content: [{ type: 'text', text: JSON.stringify(response.data) }] };
       } catch (err) {
@@ -222,22 +234,34 @@ export function registerEditingTools(server: McpServer, bridge: HwpBridge, tools
       color: z.array(z.number().int().min(0).max(255)).length(3).optional().describe('텍스트 색상 [R, G, B] (0-255)'),
     },
     async ({ find, append_text, color }) => {
-      if (!bridge.getCurrentDocument()) {
+      const filePath = bridge.getCurrentDocument();
+      if (!filePath) {
         return { content: [{ type: 'text', text: JSON.stringify({
           error: '열린 문서가 없습니다. hwp_open_document로 문서를 열어주세요.',
         }) }], isError: true };
       }
 
       try {
+        // HWPX → XML 직접 조작 (COM 우회)
+        if (bridge.getCurrentDocumentFormat() === 'HWPX' && !color) {
+          const doc = await readHwpxXml(filePath, 'Contents/section0.xml');
+          const found = findAndAppendInSection(doc, find, append_text);
+          if (!found) {
+            return { content: [{ type: 'text', text: JSON.stringify({ status: 'not_found', find, engine: 'xml' }) }] };
+          }
+          await writeHwpxXml(filePath, filePath, 'Contents/section0.xml', doc);
+          bridge.setCachedAnalysis(null);
+          return { content: [{ type: 'text', text: JSON.stringify({ status: 'ok', find, appended: true, engine: 'xml' }) }] };
+        }
+
+        // HWP → Python COM
         await bridge.ensureRunning();
         const params: Record<string, unknown> = { find, append_text };
         if (color) params.color = color;
         const response = await bridge.send('find_and_append', params);
-
         if (!response.success) {
           return { content: [{ type: 'text', text: JSON.stringify({ error: response.error }) }], isError: true };
         }
-
         bridge.setCachedAnalysis(null);
         return { content: [{ type: 'text', text: JSON.stringify(response.data) }] };
       } catch (err) {

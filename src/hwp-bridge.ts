@@ -393,6 +393,10 @@ export class HwpBridge {
     return this.currentDocumentPath;
   }
 
+  getCurrentDocumentFormat(): string | null {
+    return this.currentDocumentFormat;
+  }
+
   getCachedAnalysis(): unknown | null {
     return this.lastAnalysis;
   }

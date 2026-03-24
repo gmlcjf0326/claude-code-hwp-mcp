@@ -1,5 +1,6 @@
 /**
  * Analysis tools: analyze, get text, get tables, get fields
+ * HWPX 파일은 XML 직접 검색으로 라우팅 (COM 우회)
  */
 import { z } from 'zod';
 import path from 'node:path';
@@ -7,6 +8,7 @@ import fs from 'node:fs';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { HwpBridge } from '../hwp-bridge.js';
 import type { Toolset } from '../server.js';
+import { readHwpxXml, searchTextInSection } from '../hwpx-engine.js';
 
 const HWP_EXTENSIONS = new Set(['.hwp', '.hwpx']);
 const ANALYSIS_TIMEOUT = 60000;
@@ -202,10 +204,22 @@ export function registerAnalysisTools(server: McpServer, bridge: HwpBridge, tool
       max_results: z.number().int().min(1).optional().describe('최대 검색 결과 수 (기본 50)'),
     },
     async ({ search, max_results }) => {
-      if (!bridge.getCurrentDocument()) {
+      const filePath = bridge.getCurrentDocument();
+      if (!filePath) {
         return { content: [{ type: 'text', text: JSON.stringify({ error: '열린 문서가 없습니다. hwp_open_document로 문서를 열어주세요.' }) }], isError: true };
       }
       try {
+        // HWPX → XML 직접 검색 (COM 우회, 안정적)
+        if (bridge.getCurrentDocumentFormat() === 'HWPX') {
+          const doc = await readHwpxXml(filePath, 'Contents/section0.xml');
+          const result = searchTextInSection(doc, search);
+          const limited = max_results ? result.results.slice(0, max_results) : result.results.slice(0, 50);
+          return { content: [{ type: 'text', text: JSON.stringify({
+            search, total_found: result.total, results: limited, engine: 'xml',
+          }) }] };
+        }
+
+        // HWP → Python COM
         await bridge.ensureRunning();
         const params: Record<string, unknown> = { search };
         if (max_results) params.max_results = max_results;
