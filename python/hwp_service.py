@@ -25,7 +25,13 @@ def validate_file_path(file_path, must_exist=True):
 
 
 def _execute_all_replace(hwp, find_str, replace_str, use_regex=False):
-    """AllReplace 공통 함수. find_replace/find_replace_multi/generate_multi에서 사용."""
+    """AllReplace 공통 함수. BUG-2 fix: COM 반환값 대신 전후 텍스트 비교로 검증."""
+    # 치환 전 텍스트 캡처
+    try:
+        before = hwp.get_text_file("TEXT", "")
+    except Exception:
+        before = ""
+
     act = hwp.HAction
     pset = hwp.HParameterSet.HFindReplace
     act.GetDefault("AllReplace", pset.HSet)
@@ -37,7 +43,14 @@ def _execute_all_replace(hwp, find_str, replace_str, use_regex=False):
     pset.FindJaso = 0
     pset.AllWordForms = 0
     pset.SeveralWords = 0
-    return bool(act.Execute("AllReplace", pset.HSet))
+    act.Execute("AllReplace", pset.HSet)
+
+    # 치환 후 텍스트 비교로 실제 변경 여부 판단
+    try:
+        after = hwp.get_text_file("TEXT", "")
+    except Exception:
+        after = ""
+    return before != after
 
 
 def respond(req_id, success, data=None, error=None):
@@ -167,6 +180,11 @@ def dispatch(hwp, method, params):
         return {"status": "ok", "path": save_path, "file_size": file_size}
 
     if method == "close_document":
+        # BUG-8 fix: XHwpMessageBoxMode 복원
+        try:
+            hwp.XHwpMessageBoxMode = 0
+        except Exception:
+            pass
         hwp.close()
         _current_doc_path = None
         return {"status": "ok"}
@@ -184,15 +202,15 @@ def dispatch(hwp, method, params):
             pset.FindString = search_text
             pset.Direction = 0
             pset.IgnoreMessage = 1
-            found = act.Execute("FindReplace", pset.HSet)
-            if not found:
-                break
-            # 찾은 위치에서 컨텍스트 추출
+            act.Execute("FindReplace", pset.HSet)
+            # BUG-3 fix: 반환값 대신 선택 영역 존재 여부로 판단
             context = ""
             try:
                 context = hwp.GetTextFile("TEXT", "saveblock").strip()[:200]
             except Exception:
                 pass
+            if not context:
+                break  # 선택 영역이 없으면 더 이상 찾을 수 없음
             hwp.HAction.Run("Cancel")
             results.append({
                 "index": i + 1,
@@ -229,13 +247,18 @@ def dispatch(hwp, method, params):
         pset.FindString = params["find"]
         pset.Direction = 0
         pset.IgnoreMessage = 1
-        found = act.Execute("FindReplace", pset.HSet)
+        act.Execute("FindReplace", pset.HSet)
 
-        if not found:
+        # BUG-4 fix: 반환값 대신 선택 영역으로 찾기 성공 판단
+        try:
+            selected = hwp.GetTextFile("TEXT", "saveblock").strip()
+        except Exception:
+            selected = ""
+        if not selected:
             return {"status": "not_found", "find": params["find"]}
 
-        # 찾은 텍스트 끝으로 커서 이동 (선택 해제)
-        hwp.HAction.Run("Cancel")
+        # BUG-4 fix: Cancel 대신 MoveRight — 찾은 텍스트 끝으로 커서 이동
+        hwp.HAction.Run("MoveRight")
 
         # 색상 설정 (옵션)
         color = params.get("color")  # [r, g, b]
@@ -441,9 +464,8 @@ def dispatch(hwp, method, params):
         for r, row in enumerate(data):
             for c, val in enumerate(row):
                 if val:
-                    hwp.HAction.Run("SelectAll")
+                    # BUG-1 fix: SelectAll 제거 — 새 표의 빈 셀에 직접 삽입
                     if header_style and r == 0:
-                        # 헤더행: Bold + 가운데 정렬
                         from hwp_editor import insert_text_with_style
                         insert_text_with_style(hwp, str(val), {"bold": True})
                     else:
@@ -490,7 +512,7 @@ def dispatch(hwp, method, params):
         for r, row in enumerate(all_data):
             for c, val in enumerate(row):
                 if val:
-                    hwp.HAction.Run("SelectAll")
+                    # BUG-1 fix: SelectAll 제거
                     hwp.insert_text(str(val))
                     filled += 1
                 if c < len(row) - 1 or r < rows - 1:
@@ -710,9 +732,8 @@ def dispatch(hwp, method, params):
         for r, row in enumerate(data):
             for c, val in enumerate(row):
                 if val:
-                    hwp.HAction.Run("SelectAll")
+                    # BUG-1 fix: SelectAll 제거
                     if r == 0:
-                        # 헤더행: Bold
                         insert_text_with_style(hwp, str(val), {"bold": True})
                     else:
                         hwp.insert_text(str(val))

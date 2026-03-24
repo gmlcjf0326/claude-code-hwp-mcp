@@ -124,11 +124,22 @@ export class HwpBridge {
 
     this.process.stdout?.on('data', (chunk: Buffer) => {
       this.buffer += chunk.toString('utf-8');
-      // Buffer 크기 제한 (10MB) — 메모리 폭증 방지
+      // BUG-6 fix: 버퍼 초과 시 가장 오래된 대기 요청만 거부 (전체가 아닌 개별)
       if (this.buffer.length > this.MAX_BUFFER_SIZE) {
-        console.error(`[HWP MCP Bridge] Buffer exceeded ${this.MAX_BUFFER_SIZE / 1024 / 1024}MB, clearing`);
-        this.buffer = '';
-        this.rejectAllPending(new Error('응답 크기가 너무 큽니다. 문서를 닫고 다시 열어주세요.'));
+        console.error(`[HWP MCP Bridge] Buffer exceeded ${this.MAX_BUFFER_SIZE / 1024 / 1024}MB — truncating oldest pending`);
+        // 버퍼를 비우되, 마지막 줄바꿈 이후 부분은 보존 (진행 중인 응답)
+        const lastNewline = this.buffer.lastIndexOf('\n');
+        this.buffer = lastNewline >= 0 ? this.buffer.slice(lastNewline + 1) : '';
+        // 가장 오래된 요청 하나만 거부
+        const oldestId = this.pending.keys().next().value;
+        if (oldestId) {
+          const oldest = this.pending.get(oldestId);
+          if (oldest) {
+            clearTimeout(oldest.timer);
+            oldest.reject(new Error('응답 크기가 너무 큽니다.'));
+            this.pending.delete(oldestId);
+          }
+        }
         return;
       }
       this.processBuffer();
