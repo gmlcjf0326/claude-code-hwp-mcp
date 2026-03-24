@@ -28,8 +28,8 @@ def insert_text_with_color(hwp, text, rgb=None):
             act.GetDefault("CharShape", pset.HSet)
             pset.TextColor = hwp.RGBColor(0, 0, 0)
             act.Execute("CharShape", pset.HSet)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
 
 
 def insert_text_with_style(hwp, text, style=None):
@@ -102,24 +102,24 @@ def insert_text_with_style(hwp, text, style=None):
         try:
             pset.SpacingHangul = int(style["char_spacing"])
             pset.SpacingLatin = int(style["char_spacing"])
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
     if "width_ratio" in style:
         try:
             pset.RatioHangul = int(style["width_ratio"])
             pset.RatioLatin = int(style["width_ratio"])
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
     if "font_name_hanja" in style:
         try:
             pset.FaceNameHanja = style["font_name_hanja"]
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
     if "font_name_japanese" in style:
         try:
             pset.FaceNameJapanese = style["font_name_japanese"]
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
 
     act.Execute("CharShape", pset.HSet)
 
@@ -137,14 +137,14 @@ def insert_text_with_style(hwp, text, style=None):
         try:
             pset.SpacingHangul = saved_char_spacing
             pset.SpacingLatin = saved_char_spacing
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
     if saved_width_ratio is not None:
         try:
             pset.RatioHangul = saved_width_ratio
             pset.RatioLatin = saved_width_ratio
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
     act.Execute("CharShape", pset.HSet)
 
 
@@ -170,42 +170,42 @@ def set_paragraph_style(hwp, style=None):
     if "align" in style:
         try:
             pset.AlignType = align_map.get(style["align"], 0)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
     if "line_spacing" in style:
         try:
             pset.LineSpacingType = style.get("line_spacing_type", 0)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
         try:
             pset.LineSpacing = int(style["line_spacing"])
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
     if "space_before" in style:
         try:
             pset.PrevSpacing = int(style["space_before"] * 100)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
     if "space_after" in style:
         try:
             pset.NextSpacing = int(style["space_after"] * 100)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
     if "indent" in style:
         try:
             pset.Indentation = int(style["indent"] * 100)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
     if "left_margin" in style:
         try:
             pset.LeftMargin = int(style["left_margin"] * 100)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
     if "right_margin" in style:
         try:
             pset.RightMargin = int(style["right_margin"] * 100)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
 
     act.Execute("ParaShape", pset.HSet)
 
@@ -346,8 +346,8 @@ def get_cell_format(hwp, table_idx, cell_tab):
             hwp.HAction.Run("SelectAll")
             text_preview = hwp.GetTextFile("TEXT", "saveblock").strip()[:100]
             hwp.HAction.Run("Cancel")
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
 
         char = get_char_shape(hwp)
         para = get_para_shape(hwp)
@@ -362,8 +362,8 @@ def get_cell_format(hwp, table_idx, cell_tab):
     finally:
         try:
             hwp.Cancel()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
 
 
 def get_table_format_summary(hwp, table_idx, sample_tabs=None):
@@ -419,8 +419,8 @@ def _navigate_to_tab(hwp, table_idx, target_tab, current_tab):
     if moves < 0:
         try:
             hwp.Cancel()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
         hwp.get_into_nth_table(table_idx)
         moves = target_tab
     for _ in range(moves):
@@ -477,8 +477,8 @@ def fill_table_cells_by_tab(hwp, table_idx, cells):
     finally:
         try:
             hwp.Cancel()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
 
     return result
 
@@ -530,8 +530,8 @@ def smart_fill_table_cells(hwp, table_idx, cells):
     finally:
         try:
             hwp.Cancel()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
 
     return result
 
@@ -539,17 +539,73 @@ def smart_fill_table_cells(hwp, table_idx, cells):
 def insert_markdown(hwp, md_text):
     """마크다운 텍스트를 한글 서식으로 변환하여 삽입.
 
-    지원: # 제목, **굵게**, *기울임*, - 목록, 일반 텍스트.
+    지원: # 제목, **굵게**, *기울임*, - 목록, | 표 |, > 인용, --- 구분선.
+    BUG-5 fix: 마크다운 표 파싱 추가.
     """
     import re
 
     lines = md_text.split('\n')
     inserted = 0
+    i = 0
 
-    for line in lines:
-        stripped = line.strip()
+    while i < len(lines):
+        stripped = lines[i].strip()
+
         if not stripped:
             hwp.insert_text('\r\n')
+            i += 1
+            continue
+
+        # 수평선 (---, ***, ___)
+        if re.match(r'^[-*_]{3,}$', stripped):
+            hwp.insert_text('─' * 40 + '\r\n')
+            inserted += 1
+            i += 1
+            continue
+
+        # 마크다운 표 (| 로 시작하는 연속된 줄)
+        if stripped.startswith('|') and '|' in stripped[1:]:
+            table_lines = []
+            while i < len(lines) and lines[i].strip().startswith('|'):
+                row_text = lines[i].strip()
+                # 구분선(|---|---|) 건너뛰기
+                if re.match(r'^\|[\s\-:]+\|', row_text):
+                    i += 1
+                    continue
+                # 셀 파싱
+                cells = [c.strip() for c in row_text.split('|')]
+                cells = [c for c in cells if c]  # 빈 문자열 제거
+                table_lines.append(cells)
+                i += 1
+            # 표 생성
+            if table_lines:
+                rows = len(table_lines)
+                cols = max(len(row) for row in table_lines)
+                hwp.create_table(rows, cols)
+                for r, row in enumerate(table_lines):
+                    for c in range(cols):
+                        val = row[c] if c < len(row) else ''
+                        if val:
+                            if r == 0:
+                                insert_text_with_style(hwp, val, {"bold": True})
+                            else:
+                                hwp.insert_text(val)
+                        if c < cols - 1 or r < rows - 1:
+                            hwp.TableRightCell()
+                try:
+                    hwp.Cancel()
+                except Exception:
+                    pass
+                hwp.insert_text('\r\n')
+                inserted += 1
+            continue
+
+        # 인용문 (>)
+        if stripped.startswith('>'):
+            quote_text = stripped.lstrip('>').strip()
+            hwp.insert_text('  │ ' + quote_text + '\r\n')
+            inserted += 1
+            i += 1
             continue
 
         # 제목 (# ~ ###)
@@ -557,30 +613,32 @@ def insert_markdown(hwp, md_text):
         if heading_match:
             level = len(heading_match.group(1))
             title_text = heading_match.group(2)
-            # 제목: Bold + 큰 글씨
             sizes = {1: 22, 2: 16, 3: 13}
             insert_text_with_style(hwp, title_text + '\r\n', {
                 "bold": True,
                 "font_size": sizes.get(level, 13),
             })
             inserted += 1
+            i += 1
             continue
 
-        # 목록 (- 또는 * 또는 숫자.)
+        # 목록 (- 또는 *)
         list_match = re.match(r'^[\-\*]\s+(.+)$', stripped)
         if list_match:
             hwp.insert_text('  ◦ ' + list_match.group(1) + '\r\n')
             inserted += 1
+            i += 1
             continue
 
+        # 번호 목록
         numbered_match = re.match(r'^(\d+)\.\s+(.+)$', stripped)
         if numbered_match:
             hwp.insert_text('  ' + numbered_match.group(1) + '. ' + numbered_match.group(2) + '\r\n')
             inserted += 1
+            i += 1
             continue
 
         # 인라인 서식 처리 (**굵게**, *기울임*)
-        # 간단 처리: **text** → text (bold로 삽입), 나머지 일반
         parts = re.split(r'(\*\*[^*]+\*\*|\*[^*]+\*)', stripped)
         for part in parts:
             if part.startswith('**') and part.endswith('**'):
@@ -591,6 +649,7 @@ def insert_markdown(hwp, md_text):
                 hwp.insert_text(part)
         hwp.insert_text('\r\n')
         inserted += 1
+        i += 1
 
     return {"status": "ok", "lines_inserted": inserted}
 
@@ -864,8 +923,8 @@ def set_cell_background_color(hwp, table_idx, cells):
     finally:
         try:
             hwp.Cancel()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
 
     return {"status": "ok", **result}
 
@@ -929,5 +988,5 @@ def set_table_border_style(hwp, table_idx, cells=None, style=None):
     finally:
         try:
             hwp.Cancel()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)

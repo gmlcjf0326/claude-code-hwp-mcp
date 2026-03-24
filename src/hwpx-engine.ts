@@ -158,21 +158,63 @@ function removeLinesegarray(doc: Document): void {
 
 // ── 빈 HWPX 생성 ──
 
+/**
+ * BUG-9 fix: blank_template.hwpx 파일 의존 제거.
+ * 최소 유효 HWPX를 프로그래밍적으로 생성.
+ */
+async function createMinimalHwpx(outputPath: string, title?: string): Promise<void> {
+  const zip = new JSZip();
+
+  // mimetype
+  zip.file('mimetype', 'application/hwp+zip');
+
+  // META-INF/manifest.xml
+  zip.file('META-INF/manifest.xml', `<?xml version="1.0" encoding="UTF-8"?>
+<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0">
+  <manifest:file-entry manifest:full-path="/" manifest:media-type="application/hwp+zip"/>
+  <manifest:file-entry manifest:full-path="Contents/section0.xml" manifest:media-type="text/xml"/>
+  <manifest:file-entry manifest:full-path="Contents/content.hpf" manifest:media-type="text/xml"/>
+</manifest:manifest>`);
+
+  // Contents/content.hpf
+  zip.file('Contents/content.hpf', `<?xml version="1.0" encoding="UTF-8"?>
+<hp:HWPMLPackageFormat xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph">
+  <hp:BodyText>
+    <hp:SectionRef hp:IDRef="0"/>
+  </hp:BodyText>
+</hp:HWPMLPackageFormat>`);
+
+  // Contents/section0.xml
+  const titleText = title || '';
+  zip.file('Contents/section0.xml', `<?xml version="1.0" encoding="UTF-8"?>
+<hp:sec xmlns:hp="http://www.hancom.co.kr/hwpml/2011/paragraph">
+  <hp:p>
+    <hp:run>
+      <hp:t>${titleText}</hp:t>
+    </hp:run>
+  </hp:p>
+</hp:sec>`);
+
+  const buffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+  fs.writeFileSync(outputPath, buffer);
+}
+
 function getTemplatePath(): string {
-  // ESM에서 __dirname 대안
   const thisFile = new URL(import.meta.url).pathname.replace(/^\/([A-Z]:)/, '$1');
   return path.join(path.dirname(thisFile), '../../blank_template.hwpx');
 }
 
 /**
  * 빈 HWPX 파일 생성.
- * blank_template.hwpx를 복사하고, 필요시 제목 삽입.
+ * BUG-9 fix: blank_template.hwpx가 없으면 프로그래밍적으로 생성.
  */
 export async function createBlankHwpx(outputPath: string, title?: string): Promise<void> {
   const templatePath = getTemplatePath();
 
   if (!fs.existsSync(templatePath)) {
-    throw new Error(`빈 HWPX 템플릿을 찾을 수 없습니다: ${templatePath}. 한글에서 빈 문서를 HWPX로 저장하세요.`);
+    // 템플릿 파일 없음 → 프로그래밍적 생성
+    await createMinimalHwpx(outputPath, title);
+    return;
   }
 
   fs.copyFileSync(templatePath, outputPath);

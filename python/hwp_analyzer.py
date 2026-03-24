@@ -136,8 +136,11 @@ def analyze_document(hwp, file_path, already_open=False):
                     table_idx += 1
                 except Exception:
                     break
+            # BUG-7 fix: 실제 발견된 표 수와 스캔 상한 분리
+            result["scanned_tables"] = table_idx
             if table_idx >= MAX_TABLES:
                 result["tables_truncated"] = True
+                result["tables_truncated_message"] = f"표가 {MAX_TABLES}개 이상일 수 있습니다. 처음 {MAX_TABLES}개만 분석했습니다."
                 print(f"[WARN] Table scan capped at {MAX_TABLES}", file=sys.stderr)
         except Exception as e:
             print(f"[WARN] Table extraction failed: {e}", file=sys.stderr)

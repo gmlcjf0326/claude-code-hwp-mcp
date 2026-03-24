@@ -111,8 +111,8 @@ def dispatch(hwp, method, params):
         # 파일 열기 전 다이얼로그 자동 처리 재확인
         try:
             hwp.XHwpMessageBoxMode = 1
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
 
         result = hwp.open(file_path)
         if not result:
@@ -129,8 +129,8 @@ def dispatch(hwp, method, params):
             result["pages"] = 0
         try:
             result["current_path"] = _current_doc_path or ""
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
         return result
 
     if method == "analyze_document":
@@ -183,8 +183,8 @@ def dispatch(hwp, method, params):
         # BUG-8 fix: XHwpMessageBoxMode 복원
         try:
             hwp.XHwpMessageBoxMode = 0
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
         hwp.close()
         _current_doc_path = None
         return {"status": "ok"}
@@ -363,8 +363,8 @@ def dispatch(hwp, method, params):
         # BreakSection으로 페이지 분리 후 파일 삽입
         try:
             hwp.HAction.Run("BreakSection")
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
         hwp.insert_file(merge_path)
         return {"status": "ok", "merged_file": merge_path, "pages": hwp.PageCount}
 
@@ -475,8 +475,8 @@ def dispatch(hwp, method, params):
                     hwp.TableRightCell()
         try:
             hwp.Cancel()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
         # 헤더행 배경색 적용 (옵션)
         if header_style and rows > 0:
             try:
@@ -519,8 +519,8 @@ def dispatch(hwp, method, params):
                     hwp.TableRightCell()
         try:
             hwp.Cancel()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
         return {"status": "ok", "file": os.path.basename(csv_path), "rows": rows, "cols": cols, "filled": filled}
 
     if method == "insert_heading":
@@ -742,16 +742,16 @@ def dispatch(hwp, method, params):
                     hwp.TableRightCell()
         try:
             hwp.Cancel()
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
         # 헤더행 + ■ 셀 배경색 적용
         try:
             from hwp_editor import set_cell_background_color
             style_cells = [{"tab": i, "color": "#D9D9D9"} for i in range(cols)]  # 헤더: 연회색
             style_cells += [{"tab": t, "color": "#C0C0C0"} for t in active_cells]  # ■셀: 음영
             set_cell_background_color(hwp, -1, style_cells)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
         return {"status": "ok", "rows": rows, "cols": cols, "filled": filled, "active_cells": len(active_cells)}
 
     if method == "insert_date_code":
@@ -919,8 +919,8 @@ def dispatch(hwp, method, params):
                 count += 1
             hwp.ReleaseScan()
             text1 = "\n".join(parts)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
         hwp.close()
         # 문서 2 텍스트 추출
         hwp.open(path2)
@@ -938,8 +938,8 @@ def dispatch(hwp, method, params):
                 count += 1
             hwp.ReleaseScan()
             text2 = "\n".join(parts)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
         hwp.close()
         # diff 계산
         lines1 = text1.split("\n")
@@ -966,8 +966,8 @@ def dispatch(hwp, method, params):
                 count += 1
             hwp.ReleaseScan()
             text = "".join(parts)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
         chars_total = len(text)
         chars_no_space = len(text.replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", ""))
         words = len(text.split())
@@ -1067,8 +1067,8 @@ def dispatch(hwp, method, params):
                 count += 1
             hwp.ReleaseScan()
             text = "\n".join(parts)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] {e}", file=sys.stderr)
         # 패턴 감지: ( ), [ ], ___, ☐, □, ○, ◯, 빈칸+콜론
         patterns = [
             (r'\(\s*\)', 'bracket_empty', '빈 괄호'),
