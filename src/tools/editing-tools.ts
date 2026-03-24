@@ -161,18 +161,23 @@ export function registerEditingTools(server: McpServer, bridge: HwpBridge, tools
       }
 
       try {
-        // HWPX → XML 직접 치환 (COM 우회, 안정적)
+        // HWPX → XML 직접 치환 시도 (COM 우회). EBUSY 시 COM 폴백.
         if (bridge.getCurrentDocumentFormat() === 'HWPX' && !use_regex) {
-          const doc = await readHwpxXml(filePath, 'Contents/section0.xml');
-          const count = replaceTextInSection(doc, find, replace);
-          await writeHwpxXml(filePath, filePath, 'Contents/section0.xml', doc);
-          bridge.setCachedAnalysis(null);
-          return { content: [{ type: 'text', text: JSON.stringify({
-            status: 'ok', find, replace, replaced: count > 0, count, engine: 'xml',
-          }) }] };
+          try {
+            const doc = await readHwpxXml(filePath, 'Contents/section0.xml');
+            const count = replaceTextInSection(doc, find, replace);
+            await writeHwpxXml(filePath, filePath, 'Contents/section0.xml', doc);
+            bridge.setCachedAnalysis(null);
+            return { content: [{ type: 'text', text: JSON.stringify({
+              status: 'ok', find, replace, replaced: count > 0, count, engine: 'xml',
+            }) }] };
+          } catch (xmlErr) {
+            // 파일 잠금(EBUSY) 등 XML 실패 시 COM 폴백
+            console.error('[find_replace] XML failed, falling back to COM:', (xmlErr as Error).message);
+          }
         }
 
-        // HWP → Python COM 경로
+        // COM 경로 (HWP 또는 HWPX XML 실패 시 폴백)
         await bridge.ensureRunning();
         const params: Record<string, unknown> = { find, replace };
         if (use_regex) params.use_regex = true;
@@ -209,27 +214,31 @@ export function registerEditingTools(server: McpServer, bridge: HwpBridge, tools
       }
 
       try {
-        // C1 fix: HWPX → XML 직접 다건 치환 (COM 우회)
+        // HWPX → XML 직접 다건 치환 시도. EBUSY 시 COM 폴백.
         if (bridge.getCurrentDocumentFormat() === 'HWPX' && !use_regex) {
-          const doc = await readHwpxXml(filePath, 'Contents/section0.xml');
-          const results: Array<{ find: string; replaced: boolean; count?: number }> = [];
-          let totalCount = 0;
-          for (const item of replacements) {
-            const count = replaceTextInSection(doc, item.find, item.replace);
-            results.push({ find: item.find, replaced: count > 0, count });
-            totalCount += count;
+          try {
+            const doc = await readHwpxXml(filePath, 'Contents/section0.xml');
+            const results: Array<{ find: string; replaced: boolean; count?: number }> = [];
+            let totalCount = 0;
+            for (const item of replacements) {
+              const count = replaceTextInSection(doc, item.find, item.replace);
+              results.push({ find: item.find, replaced: count > 0, count });
+              totalCount += count;
+            }
+            if (totalCount > 0) {
+              await writeHwpxXml(filePath, filePath, 'Contents/section0.xml', doc);
+            }
+            bridge.setCachedAnalysis(null);
+            return { content: [{ type: 'text', text: JSON.stringify({
+              status: 'ok', results, total: results.length,
+              success: results.filter(r => r.replaced).length, engine: 'xml',
+            }) }] };
+          } catch (xmlErr) {
+            console.error('[find_replace_multi] XML failed, falling back to COM:', (xmlErr as Error).message);
           }
-          if (totalCount > 0) {
-            await writeHwpxXml(filePath, filePath, 'Contents/section0.xml', doc);
-          }
-          bridge.setCachedAnalysis(null);
-          return { content: [{ type: 'text', text: JSON.stringify({
-            status: 'ok', results, total: results.length,
-            success: results.filter(r => r.replaced).length, engine: 'xml',
-          }) }] };
         }
 
-        // HWP → Python COM
+        // COM 경로 (HWP 또는 HWPX XML 실패 시 폴백)
         await bridge.ensureRunning();
         const params: Record<string, unknown> = { replacements };
         if (use_regex) params.use_regex = true;
@@ -262,19 +271,23 @@ export function registerEditingTools(server: McpServer, bridge: HwpBridge, tools
       }
 
       try {
-        // HWPX → XML 직접 조작 (COM 우회)
+        // HWPX → XML 직접 조작 시도. EBUSY 시 COM 폴백.
         if (bridge.getCurrentDocumentFormat() === 'HWPX' && !color) {
-          const doc = await readHwpxXml(filePath, 'Contents/section0.xml');
-          const found = findAndAppendInSection(doc, find, append_text);
-          if (!found) {
-            return { content: [{ type: 'text', text: JSON.stringify({ status: 'not_found', find, engine: 'xml' }) }] };
+          try {
+            const doc = await readHwpxXml(filePath, 'Contents/section0.xml');
+            const found = findAndAppendInSection(doc, find, append_text);
+            if (!found) {
+              return { content: [{ type: 'text', text: JSON.stringify({ status: 'not_found', find, engine: 'xml' }) }] };
+            }
+            await writeHwpxXml(filePath, filePath, 'Contents/section0.xml', doc);
+            bridge.setCachedAnalysis(null);
+            return { content: [{ type: 'text', text: JSON.stringify({ status: 'ok', find, appended: true, engine: 'xml' }) }] };
+          } catch (xmlErr) {
+            console.error('[find_and_append] XML failed, falling back to COM:', (xmlErr as Error).message);
           }
-          await writeHwpxXml(filePath, filePath, 'Contents/section0.xml', doc);
-          bridge.setCachedAnalysis(null);
-          return { content: [{ type: 'text', text: JSON.stringify({ status: 'ok', find, appended: true, engine: 'xml' }) }] };
         }
 
-        // HWP → Python COM
+        // COM 경로 (HWP 또는 HWPX XML 실패 시 폴백)
         await bridge.ensureRunning();
         const params: Record<string, unknown> = { find, append_text };
         if (color) params.color = color;
@@ -400,17 +413,21 @@ export function registerEditingTools(server: McpServer, bridge: HwpBridge, tools
       }
 
       try {
-        // C2 fix: HWPX → XML 직접 N번째 치환 (COM 우회)
+        // HWPX → XML 직접 N번째 치환 시도. EBUSY 시 COM 폴백.
         if (bridge.getCurrentDocumentFormat() === 'HWPX') {
-          const doc = await readHwpxXml(filePath, 'Contents/section0.xml');
-          const replaced = replaceTextNthInSection(doc, find, replace, nth);
-          if (replaced) {
-            await writeHwpxXml(filePath, filePath, 'Contents/section0.xml', doc);
+          try {
+            const doc = await readHwpxXml(filePath, 'Contents/section0.xml');
+            const replaced = replaceTextNthInSection(doc, find, replace, nth);
+            if (replaced) {
+              await writeHwpxXml(filePath, filePath, 'Contents/section0.xml', doc);
+            }
+            bridge.setCachedAnalysis(null);
+            return { content: [{ type: 'text', text: JSON.stringify({
+              status: 'ok', find, replace, nth, replaced, engine: 'xml',
+            }) }] };
+          } catch (xmlErr) {
+            console.error('[find_replace_nth] XML failed, falling back to COM:', (xmlErr as Error).message);
           }
-          bridge.setCachedAnalysis(null);
-          return { content: [{ type: 'text', text: JSON.stringify({
-            status: 'ok', find, replace, nth, replaced, engine: 'xml',
-          }) }] };
         }
 
         // HWP → Python COM

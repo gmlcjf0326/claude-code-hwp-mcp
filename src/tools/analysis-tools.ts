@@ -209,17 +209,21 @@ export function registerAnalysisTools(server: McpServer, bridge: HwpBridge, tool
         return { content: [{ type: 'text', text: JSON.stringify({ error: '열린 문서가 없습니다. hwp_open_document로 문서를 열어주세요.' }) }], isError: true };
       }
       try {
-        // HWPX → XML 직접 검색 (COM 우회, 안정적)
+        // HWPX → XML 직접 검색 시도. EBUSY 시 COM 폴백.
         if (bridge.getCurrentDocumentFormat() === 'HWPX') {
-          const doc = await readHwpxXml(filePath, 'Contents/section0.xml');
-          const result = searchTextInSection(doc, search);
-          const limited = max_results ? result.results.slice(0, max_results) : result.results.slice(0, 50);
-          return { content: [{ type: 'text', text: JSON.stringify({
-            search, total_found: result.total, results: limited, engine: 'xml',
-          }) }] };
+          try {
+            const doc = await readHwpxXml(filePath, 'Contents/section0.xml');
+            const result = searchTextInSection(doc, search);
+            const limited = max_results ? result.results.slice(0, max_results) : result.results.slice(0, 50);
+            return { content: [{ type: 'text', text: JSON.stringify({
+              search, total_found: result.total, results: limited, engine: 'xml',
+            }) }] };
+          } catch (xmlErr) {
+            console.error('[text_search] XML failed, falling back to COM:', (xmlErr as Error).message);
+          }
         }
 
-        // HWP → Python COM
+        // COM 경로 (HWP 또는 HWPX XML 실패 시 폴백)
         await bridge.ensureRunning();
         const params: Record<string, unknown> = { search };
         if (max_results) params.max_results = max_results;
