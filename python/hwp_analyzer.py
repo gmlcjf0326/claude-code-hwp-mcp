@@ -91,8 +91,8 @@ def analyze_document(hwp, file_path, already_open=False):
     # 커서를 문서 처음으로 이동
     try:
         hwp.MovePos(2)  # movePOS_START: 문서 처음으로
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[WARN] MovePos failed: {e}", file=sys.stderr)
 
     result = {
         "file_path": file_path,
@@ -131,8 +131,8 @@ def analyze_document(hwp, file_path, already_open=False):
                     result["tables"].append(table_info)
                     try:
                         hwp.Cancel()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        print(f"[WARN] Cancel failed: {e}", file=sys.stderr)
                     table_idx += 1
                 except Exception:
                     break
@@ -155,8 +155,8 @@ def analyze_document(hwp, file_path, already_open=False):
                         value = ""
                         try:
                             value = hwp.GetFieldText(field.strip()) or ""
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            print(f"[WARN] GetFieldText failed: {e}", file=sys.stderr)
                         result["fields"].append({
                             "name": field.strip(),
                             "value": value,
@@ -197,8 +197,8 @@ def analyze_document(hwp, file_path, already_open=False):
         if scan_started:
             try:
                 hwp.ReleaseScan()
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[WARN] ReleaseScan failed: {e}", file=sys.stderr)
 
     return result
 
@@ -238,8 +238,8 @@ def map_table_cells(hwp, table_idx, max_cells=200):
             finally:
                 try:
                     hwp.HAction.Run("Cancel")
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"[WARN] Cancel in map_table_cells: {e}", file=sys.stderr)
 
             cell_map.append({
                 "tab": i,
@@ -254,8 +254,8 @@ def map_table_cells(hwp, table_idx, max_cells=200):
 
     try:
         hwp.Cancel()
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[WARN] Final cancel in map_table_cells: {e}", file=sys.stderr)
 
     return {
         "table_index": table_idx,

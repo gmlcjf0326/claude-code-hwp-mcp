@@ -201,22 +201,42 @@ export function registerEditingTools(server: McpServer, bridge: HwpBridge, tools
       use_regex: z.boolean().optional().describe('정규식 사용 여부 (기본: false)'),
     },
     async ({ replacements, use_regex }) => {
-      if (!bridge.getCurrentDocument()) {
+      const filePath = bridge.getCurrentDocument();
+      if (!filePath) {
         return { content: [{ type: 'text', text: JSON.stringify({
           error: '열린 문서가 없습니다. hwp_open_document로 문서를 열어주세요.',
         }) }], isError: true };
       }
 
       try {
+        // C1 fix: HWPX → XML 직접 다건 치환 (COM 우회)
+        if (bridge.getCurrentDocumentFormat() === 'HWPX' && !use_regex) {
+          const doc = await readHwpxXml(filePath, 'Contents/section0.xml');
+          const results: Array<{ find: string; replaced: boolean; count?: number }> = [];
+          let totalCount = 0;
+          for (const item of replacements) {
+            const count = replaceTextInSection(doc, item.find, item.replace);
+            results.push({ find: item.find, replaced: count > 0, count });
+            totalCount += count;
+          }
+          if (totalCount > 0) {
+            await writeHwpxXml(filePath, filePath, 'Contents/section0.xml', doc);
+          }
+          bridge.setCachedAnalysis(null);
+          return { content: [{ type: 'text', text: JSON.stringify({
+            status: 'ok', results, total: results.length,
+            success: results.filter(r => r.replaced).length, engine: 'xml',
+          }) }] };
+        }
+
+        // HWP → Python COM
         await bridge.ensureRunning();
         const params: Record<string, unknown> = { replacements };
         if (use_regex) params.use_regex = true;
         const response = await bridge.send('find_replace_multi', params, FILL_TIMEOUT);
-
         if (!response.success) {
           return { content: [{ type: 'text', text: JSON.stringify({ error: response.error }) }], isError: true };
         }
-
         bridge.setCachedAnalysis(null);
         return { content: [{ type: 'text', text: JSON.stringify(response.data) }] };
       } catch (err) {
@@ -372,20 +392,33 @@ export function registerEditingTools(server: McpServer, bridge: HwpBridge, tools
       nth: z.number().int().min(1).describe('몇 번째 매칭을 치환할지 (1부터 시작)'),
     },
     async ({ find, replace, nth }) => {
-      if (!bridge.getCurrentDocument()) {
+      const filePath = bridge.getCurrentDocument();
+      if (!filePath) {
         return { content: [{ type: 'text', text: JSON.stringify({
           error: '열린 문서가 없습니다. hwp_open_document로 문서를 열어주세요.',
         }) }], isError: true };
       }
 
       try {
+        // C2 fix: HWPX → XML 직접 N번째 치환 (COM 우회)
+        if (bridge.getCurrentDocumentFormat() === 'HWPX') {
+          const doc = await readHwpxXml(filePath, 'Contents/section0.xml');
+          const replaced = replaceTextNthInSection(doc, find, replace, nth);
+          if (replaced) {
+            await writeHwpxXml(filePath, filePath, 'Contents/section0.xml', doc);
+          }
+          bridge.setCachedAnalysis(null);
+          return { content: [{ type: 'text', text: JSON.stringify({
+            status: 'ok', find, replace, nth, replaced, engine: 'xml',
+          }) }] };
+        }
+
+        // HWP → Python COM
         await bridge.ensureRunning();
         const response = await bridge.send('find_replace_nth', { find, replace, nth });
-
         if (!response.success) {
           return { content: [{ type: 'text', text: JSON.stringify({ error: response.error }) }], isError: true };
         }
-
         bridge.setCachedAnalysis(null);
         return { content: [{ type: 'text', text: JSON.stringify(response.data) }] };
       } catch (err) {

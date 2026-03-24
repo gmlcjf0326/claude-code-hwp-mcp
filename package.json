@@ -14,7 +14,7 @@
   ],
   "scripts": {
     "build": "tsc",
-    "postinstall": "node -e \"try{require('child_process').execSync('python -c \\\"import pyhwpx\\\"',{stdio:'ignore'})}catch{console.log('\\n[claude-code-hwp-mcp] pyhwpx 미설치. 실행하세요: pip install pyhwpx pywin32\\n')}\"",
+    "postinstall": "node --input-type=commonjs -e \"try{require('child_process').execSync('python -c \\\"import pyhwpx\\\"',{stdio:'ignore'})}catch(e){console.log('\\n[claude-code-hwp-mcp] pyhwpx 미설치. 실행하세요: pip install pyhwpx pywin32\\n')}\"",
     "prepublishOnly": "npm run build",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts"
