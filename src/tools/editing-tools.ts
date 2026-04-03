@@ -375,7 +375,7 @@ export function registerEditingTools(server: McpServer, bridge: HwpBridge, tools
         if (keep_lines_together !== undefined) style.keep_lines_together = keep_lines_together;
         if (condense !== undefined) style.condense = condense;
 
-        const response = await bridge.send('set_paragraph_style', { style });
+        const response = await bridge.send('set_paragraph_style', { style }, FILL_TIMEOUT);
         if (!response.success) {
           return { content: [{ type: 'text', text: JSON.stringify({ error: response.error }) }], isError: true };
         }
@@ -405,7 +405,7 @@ export function registerEditingTools(server: McpServer, bridge: HwpBridge, tools
       try {
         // COM 우선 (HWP/HWPX 모두)
         await bridge.ensureRunning();
-        const response = await bridge.send('find_replace_nth', { find, replace, nth });
+        const response = await bridge.send('find_replace_nth', { find, replace, nth }, FILL_TIMEOUT);
         if (!response.success) {
           return { content: [{ type: 'text', text: JSON.stringify({ error: response.error }) }], isError: true };
         }
