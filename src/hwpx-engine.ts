@@ -277,6 +277,415 @@ function removeLinesegarray(doc: Document): void {
   }
 }
 
+/**
+ * 특정 element 내부의 linesegarray만 삭제 (전역 X).
+ * v0.7.0: 표 셀 단위 텍스트 변경 시 사용.
+ */
+function removeLinesegarrayInElement(el: Element): void {
+  const linesegArrays = el.getElementsByTagNameNS(NS_HP, 'linesegarray');
+  const toRemove: Element[] = [];
+  for (let i = 0; i < linesegArrays.length; i++) {
+    toRemove.push(linesegArrays[i] as Element);
+  }
+  for (const tgt of toRemove) {
+    tgt.parentNode?.removeChild(tgt);
+  }
+}
+
+// ──────────────────────────────────────────────────────────
+// v0.7.0: 표 셀 단위 XML 편집 (tc → subList → p → run → t)
+// ──────────────────────────────────────────────────────────
+
+export interface CellReplaceOptions {
+  tableIndex: number;
+  rowIndex: number;
+  colIndex: number;
+  find: string;
+  replace: string;
+  preserveCharPr?: boolean;
+  occurrence?: number; // 0=all, 1+=nth (default 0)
+}
+
+export interface CellReplaceResult {
+  matched: number;
+  cellText: string;
+  charPrIDRef: string | null;
+  warnings: string[];
+}
+
+/**
+ * v0.7.0 신규: 표의 (row, col) 셀에서 텍스트 치환.
+ * 경로: tc → subList → p → run → t (CLAUDE.md 규칙 10).
+ * - linesegarray 셀 내부만 삭제
+ * - charPrIDRef 보존 (CLAUDE.md 규칙 9)
+ * - 평탄화 tableIndex (재귀 X — 중첩 표는 replaceInNestedTable 사용)
+ *
+ * @throws Error 'TableNotFound' / 'RowOutOfRange' / 'ColOutOfRange'
+ */
+export function replaceInTableCell(
+  doc: Document,
+  opts: CellReplaceOptions
+): CellReplaceResult {
+  const warnings: string[] = [];
+  const occurrence = opts.occurrence ?? 0;
+
+  // 1. doc 전체에서 tbl flat list (재귀 X — direct children만 골라야 하지만
+  //    HWPX는 모든 tbl이 sec/p/run 내부에 있으므로 getElementsByTagNameNS로 평탄화)
+  const tbls = doc.getElementsByTagNameNS(NS_HP, 'tbl');
+  if (opts.tableIndex < 0 || opts.tableIndex >= tbls.length) {
+    throw new Error(
+      `TableNotFound: index=${opts.tableIndex}, total=${tbls.length}`
+    );
+  }
+  const tbl = tbls[opts.tableIndex] as Element;
+
+  // 2. tbl의 direct tr children
+  const allTrs = tbl.getElementsByTagNameNS(NS_HP, 'tr');
+  // direct children만 (parent === tbl)
+  const trs: Element[] = [];
+  for (let i = 0; i < allTrs.length; i++) {
+    const tr = allTrs[i] as Element;
+    if (tr.parentNode === tbl) trs.push(tr);
+  }
+  if (opts.rowIndex < 0 || opts.rowIndex >= trs.length) {
+    throw new Error(
+      `RowOutOfRange: row=${opts.rowIndex}, total=${trs.length}`
+    );
+  }
+  const tr = trs[opts.rowIndex];
+
+  // 3. tr의 direct tc children
+  const allTcs = tr.getElementsByTagNameNS(NS_HP, 'tc');
+  const tcs: Element[] = [];
+  for (let i = 0; i < allTcs.length; i++) {
+    const tc = allTcs[i] as Element;
+    if (tc.parentNode === tr) tcs.push(tc);
+  }
+  if (opts.colIndex < 0 || opts.colIndex >= tcs.length) {
+    throw new Error(
+      `ColOutOfRange: col=${opts.colIndex}, total=${tcs.length}`
+    );
+  }
+  const tc = tcs[opts.colIndex];
+
+  // 4. tc → 첫 subList → p → run → t 노드 수집
+  const allSubLists = tc.getElementsByTagNameNS(NS_HP, 'subList');
+  let subList: Element | null = null;
+  for (let i = 0; i < allSubLists.length; i++) {
+    const sl = allSubLists[i] as Element;
+    if (sl.parentNode === tc) {
+      subList = sl;
+      break;
+    }
+  }
+  if (!subList) {
+    return { matched: 0, cellText: '', charPrIDRef: null, warnings: ['NoSubList'] };
+  }
+
+  // 5. cell의 모든 t 노드 수집 + paraText 재구성
+  const tNodes = subList.getElementsByTagNameNS(NS_HP, 't');
+  const tElements: Element[] = [];
+  let cellText = '';
+  let charPrIDRef: string | null = null;
+
+  for (let i = 0; i < tNodes.length; i++) {
+    const tEl = tNodes[i] as Element;
+    tElements.push(tEl);
+    cellText += tEl.textContent || '';
+    // 첫 run의 charPrIDRef 추출
+    if (charPrIDRef === null) {
+      const runEl = tEl.parentNode as Element | null;
+      if (runEl) {
+        const ref = runEl.getAttribute('charPrIDRef');
+        if (ref) charPrIDRef = ref;
+      }
+    }
+  }
+
+  // 6. find 위치 탐색 + 치환
+  if (!opts.find || cellText.indexOf(opts.find) === -1) {
+    return { matched: 0, cellText, charPrIDRef, warnings };
+  }
+
+  let matched = 0;
+  // 단순 전략: 첫 t 노드에 치환된 텍스트 통합, 나머지는 빈 문자열로.
+  // (run 경계 가로지르는 매치도 안전 처리. charPrIDRef는 첫 run 보존)
+  let newCellText: string;
+  if (occurrence === 0) {
+    // 전체 치환
+    const before = cellText;
+    newCellText = before.split(opts.find).join(opts.replace);
+    matched = (before.length - newCellText.replace(new RegExp(escapeRegex(opts.replace), 'g'), '').length) /
+              Math.max(opts.find.length, 1);
+    // 더 정확한 카운트: split 결과 - 1
+    matched = before.split(opts.find).length - 1;
+  } else {
+    // N번째 치환
+    let idx = -1;
+    for (let n = 0; n < occurrence; n++) {
+      idx = cellText.indexOf(opts.find, idx + 1);
+      if (idx === -1) break;
+    }
+    if (idx === -1) {
+      return { matched: 0, cellText, charPrIDRef, warnings: ['OccurrenceNotFound'] };
+    }
+    newCellText =
+      cellText.substring(0, idx) +
+      opts.replace +
+      cellText.substring(idx + opts.find.length);
+    matched = 1;
+  }
+
+  // 7. 첫 t에 newCellText 통합, 나머지 t는 빈 문자열
+  if (tElements.length > 0) {
+    tElements[0].textContent = newCellText;
+    for (let i = 1; i < tElements.length; i++) {
+      tElements[i].textContent = '';
+    }
+  }
+
+  // 8. 셀 내부 linesegarray만 삭제
+  removeLinesegarrayInElement(tc);
+
+  return { matched, cellText: newCellText, charPrIDRef, warnings };
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// ──────────────────────────────────────────────────────────
+// v0.7.0: 필드 재계산 (목차/페이지번호 dirty mark)
+// ──────────────────────────────────────────────────────────
+
+export type FieldType =
+  | 'PageNum'
+  | 'TotalPage'
+  | 'Date'
+  | 'Time'
+  | 'TOC'
+  | 'Index'
+  | 'CrossRef'
+  | 'FieldFormula'
+  | 'all';
+
+export interface FieldRecalcResult {
+  marked: number;
+  byType: Record<string, number>;
+  unsupported: string[];
+}
+
+/**
+ * v0.7.0 신규: 문서 내 모든 자동 계산 필드에 dirty="1" attribute 추가.
+ * 한글이 파일을 다음 열 때 자동 재계산.
+ *
+ * 처리 대상: PageNum, TotalPage, Date, Time, TOC, Index, CrossRef, FieldFormula
+ */
+export function markFieldsForRecalc(
+  doc: Document,
+  fieldTypes?: FieldType[]
+): FieldRecalcResult {
+  const types = fieldTypes && fieldTypes.length > 0 ? fieldTypes : (['all'] as FieldType[]);
+  const wantAll = types.includes('all');
+
+  const result: FieldRecalcResult = { marked: 0, byType: {}, unsupported: [] };
+
+  // 1. 모든 ctrl 요소 수집
+  const ctrls = doc.getElementsByTagNameNS(NS_HP, 'ctrl');
+
+  // 2. 각 ctrl의 자식 첫 element의 localName으로 종류 식별
+  const typeMap: Record<string, FieldType> = {
+    pageNum: 'PageNum',
+    pageNumCtrl: 'PageNum',
+    pageInfo: 'PageNum',
+    totalPage: 'TotalPage',
+    totalPageCtrl: 'TotalPage',
+    date: 'Date',
+    dateCtrl: 'Date',
+    time: 'Time',
+    timeCtrl: 'Time',
+    tocCtrl: 'TOC',
+    toc: 'TOC',
+    indexCtrl: 'Index',
+    index: 'Index',
+    crossRefCtrl: 'CrossRef',
+    crossRef: 'CrossRef',
+    fieldBegin: 'FieldFormula', // generic field
+  };
+
+  for (let i = 0; i < ctrls.length; i++) {
+    const ctrl = ctrls[i] as Element;
+    // 자식 element 중 첫 번째
+    let firstChildEl: Element | null = null;
+    const children = ctrl.childNodes;
+    for (let j = 0; j < children.length; j++) {
+      const child = children[j];
+      if (child && child.nodeType === 1 /* ELEMENT_NODE */) {
+        firstChildEl = child as Element;
+        break;
+      }
+    }
+    if (!firstChildEl) {
+      result.unsupported.push('ctrl-no-child');
+      continue;
+    }
+    const localName = firstChildEl.localName || '';
+    const fieldType = typeMap[localName];
+    if (!fieldType) {
+      result.unsupported.push(localName);
+      continue;
+    }
+    if (!wantAll && !types.includes(fieldType)) {
+      continue;
+    }
+    // dirty attribute 설정
+    try {
+      firstChildEl.setAttribute('dirty', '1');
+      ctrl.setAttribute('dirty', '1');
+      result.marked++;
+      result.byType[fieldType] = (result.byType[fieldType] || 0) + 1;
+    } catch (e) {
+      result.unsupported.push(`${localName}-setattr-failed`);
+    }
+  }
+
+  return result;
+}
+
+// ──────────────────────────────────────────────────────────
+// v0.7.0: COM/XML 일관성 검증
+// ──────────────────────────────────────────────────────────
+
+export interface ComXmlStats {
+  tables: number;
+  paragraphs: number;
+  fields: number;
+  runs: number;
+  chars: number;
+}
+
+export interface ComXmlDiff {
+  com: ComXmlStats;
+  xml: ComXmlStats;
+  diff: ComXmlStats;
+  ok: boolean;
+  warnings: string[];
+}
+
+/**
+ * v0.7.0 신규: HWPX XML과 COM 통계 비교.
+ * Python COM에서 사전 수집한 stats를 입력으로 받아 XML 파싱 결과와 diff.
+ * 임계: |Δtables| ≤ 0, |Δparagraphs| ≤ 1, |Δchars| ≤ 5
+ */
+export async function compareCOMAndXML(
+  filePath: string,
+  comStats: ComXmlStats
+): Promise<ComXmlDiff> {
+  const warnings: string[] = [];
+
+  // section0.xml만 우선 처리 (다중 섹션은 향후 확장)
+  let doc: Document;
+  try {
+    doc = await readHwpxXml(filePath, 'Contents/section0.xml');
+  } catch (e) {
+    return {
+      com: comStats,
+      xml: { tables: 0, paragraphs: 0, fields: 0, runs: 0, chars: 0 },
+      diff: { tables: 0, paragraphs: 0, fields: 0, runs: 0, chars: 0 },
+      ok: false,
+      warnings: [`readHwpxXml failed: ${(e as Error).message}`],
+    };
+  }
+
+  const tables = doc.getElementsByTagNameNS(NS_HP, 'tbl').length;
+  const paragraphs = doc.getElementsByTagNameNS(NS_HP, 'p').length;
+  const ctrls = doc.getElementsByTagNameNS(NS_HP, 'ctrl').length;
+  const runs = doc.getElementsByTagNameNS(NS_HP, 'run').length;
+
+  let chars = 0;
+  const tNodes = doc.getElementsByTagNameNS(NS_HP, 't');
+  for (let i = 0; i < tNodes.length; i++) {
+    chars += (tNodes[i].textContent || '').length;
+  }
+
+  const xml: ComXmlStats = { tables, paragraphs, fields: ctrls, runs, chars };
+
+  const diff: ComXmlStats = {
+    tables: xml.tables - comStats.tables,
+    paragraphs: xml.paragraphs - comStats.paragraphs,
+    fields: xml.fields - comStats.fields,
+    runs: xml.runs - comStats.runs,
+    chars: xml.chars - comStats.chars,
+  };
+
+  let ok = true;
+  if (Math.abs(diff.tables) > 0) {
+    warnings.push(`table count mismatch: Δ=${diff.tables}`);
+    ok = false;
+  }
+  if (Math.abs(diff.paragraphs) > 1) {
+    warnings.push(`paragraph count mismatch: Δ=${diff.paragraphs} (threshold ±1)`);
+    ok = false;
+  }
+  if (Math.abs(diff.chars) > 5) {
+    warnings.push(`char count mismatch: Δ=${diff.chars} (threshold ±5)`);
+    ok = false;
+  }
+
+  return { com: comStats, xml, diff, ok, warnings };
+}
+
+// ──────────────────────────────────────────────────────────
+// v0.7.0: 중첩 표 인터페이스 (v0.7.2.1 정식 구현)
+// ──────────────────────────────────────────────────────────
+
+export interface NestedPathStep {
+  tableIndex: number;
+  row: number;
+  col: number;
+}
+
+/**
+ * v0.7.0 신규 (인터페이스만): 중첩 표 셀 텍스트 치환.
+ * - path.length === 1: replaceInTableCell로 위임 (정식 지원)
+ * - path.length >= 2: 'nested-table-experimental' warning + 첫 단계만 처리
+ *
+ * 정식 다단계 지원은 v0.7.2.1에서 구현 (재귀 처리).
+ */
+export function replaceInNestedTable(
+  doc: Document,
+  path: NestedPathStep[],
+  find: string,
+  replace: string
+): CellReplaceResult {
+  if (path.length === 0) {
+    throw new Error('NestedPathError: empty path');
+  }
+  if (path.length === 1) {
+    const step = path[0];
+    return replaceInTableCell(doc, {
+      tableIndex: step.tableIndex,
+      rowIndex: step.row,
+      colIndex: step.col,
+      find,
+      replace,
+    });
+  }
+  // path.length >= 2: 첫 단계만 처리, 경고 추가
+  const step = path[0];
+  const result = replaceInTableCell(doc, {
+    tableIndex: step.tableIndex,
+    rowIndex: step.row,
+    colIndex: step.col,
+    find,
+    replace,
+  });
+  result.warnings.push(
+    `nested-table-experimental: depth=${path.length}, only first step processed (full support in v0.7.2.1)`
+  );
+  return result;
+}
+
 // ── 빈 HWPX 생성 ──
 
 /**
