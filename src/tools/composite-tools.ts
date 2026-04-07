@@ -1737,10 +1737,11 @@ export function registerCompositeTools(server: McpServer, bridge: HwpBridge): vo
         } catch (e) { recordStep('generate_toc', false, (e as Error).message); }
         if (isCancelled()) throw new Error('cancelled');
 
-        // STEP: 일단 저장 (validate가 path 필요)
-        const saveR = await bridge.send('save_document', { file_path: args.output_path }, ANALYSIS_TIMEOUT);
-        recordStep('save_document', saveR.success, saveR.error);
-        if (!saveR.success) throw new Error(`save_document failed: ${saveR.error}`);
+        // STEP: 저장 (v0.7.2.7: save_document는 현재경로만 저장 → 새 문서는 save_as 필수)
+        const saveFmt = args.output_path.toLowerCase().endsWith('.hwpx') ? 'HWPX' : 'HWP';
+        const saveR = await bridge.send('save_as', { path: args.output_path, format: saveFmt }, ANALYSIS_TIMEOUT);
+        recordStep('save_as', saveR.success, saveR.error);
+        if (!saveR.success) throw new Error(`save_as failed: ${saveR.error}`);
 
         // STEP: validate_consistency, score < 85면 review_and_edit auto_fix (placeholder)
         let score = 100;
