@@ -472,13 +472,15 @@ export function registerEditingTools(server: McpServer, bridge: HwpBridge, tools
 
   server.tool(
     'hwp_insert_picture',
-    '현재 커서 위치에 이미지를 삽입합니다. 표 셀 안에서도 사용 가능합니다. 사업계획서의 제품사진 등을 삽입할 때 사용하세요.',
+    '현재 커서 위치에 이미지를 삽입합니다. 표 셀 안에서도 사용 가능. (v0.7.3) treat_as_char (글자처럼 취급) + embedded (본문에 박힘) 옵션 지원.',
     {
       file_path: z.string().describe('이미지 파일 경로 (jpg, png, bmp 등)'),
-      width: z.number().min(0).optional().describe('가로 크기 (mm, 0이면 원본 크기)'),
-      height: z.number().min(0).optional().describe('세로 크기 (mm, 0이면 원본 크기)'),
+      width: z.number().min(0).optional().describe('가로 크기 (mm, 0이면 원본)'),
+      height: z.number().min(0).optional().describe('세로 크기 (mm, 0이면 원본)'),
+      treat_as_char: z.boolean().optional().describe('v0.7.3 신규: 글자처럼 취급 (기본 true). false 면 본문과 분리된 그림 객체로 배치.'),
+      embedded: z.boolean().optional().describe('v0.7.3 신규: 본문에 박힘 여부. treat_as_char 와 보완 관계.'),
     },
-    async ({ file_path, width, height }) => {
+    async ({ file_path, width, height, treat_as_char, embedded }) => {
       if (!bridge.getCurrentDocument()) {
         return { content: [{ type: 'text', text: JSON.stringify({
           error: '열린 문서가 없습니다. hwp_open_document로 문서를 열어주세요.',
@@ -490,6 +492,8 @@ export function registerEditingTools(server: McpServer, bridge: HwpBridge, tools
         const params: Record<string, unknown> = { file_path: path.resolve(file_path) };
         if (width) params.width = width;
         if (height) params.height = height;
+        if (treat_as_char !== undefined) params.treat_as_char = treat_as_char;
+        if (embedded !== undefined) params.embedded = embedded;
         const response = await bridge.send('insert_picture', params);
 
         if (!response.success) {
