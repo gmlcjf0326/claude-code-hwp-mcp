@@ -1,7 +1,7 @@
 {
   "name": "claude-code-hwp-mcp",
-  "version": "0.7.3.3",
-  "description": "MCP server for HWP (한글) document automation via pyhwpx COM API. 94 tools for document editing, analysis, table formatting, and AI-powered filling.",
+  "version": "0.8.2",
+  "description": "MCP server for HWP (한글) document automation via pyhwpx COM API. 118 RPC handlers (Python). v0.8.2: rule-based form filling engine (Phase 5A-G). form_profile + placeholder_detector (R1-R6 rules) + cleanup_all_placeholders (multi-method fallback, section heading 보호) + smart_fill_table_auto (auto-fit font_size/align) + mark_review_required + form_fill_auto (composite pipeline). 146 unit tests. 사용자 원칙: '수천개의 양식을 모두 학습할 수 없기에 그때그때 양식에 따라서 달라짐을 알아야합니다' → hardcode 없이 rule 기반 동적 적응.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
